@@ -361,11 +361,6 @@ st.caption(
     "as stakeholders — data scraped from set.or.th"
 )
 
-st.info(
-    "Nodes represent SET50 companies and stakeholders/shareholders. "
-    "Edges represent shareholding relationships. "
-    "Node size reflects degree, and edge thickness reflects shareholding percentage."
-)
 
 # ═══════════════════════ Sidebar ═══════════════════════
 
