@@ -424,14 +424,14 @@ col4.metric("Density", f"{density:.4f}")
 
 with st.expander("Legend and Methodology", expanded=True):
     st.markdown("""
-    **Network design**
+    # **Network design**
 
-    - **Company nodes:** SET50 listed companies, colored by sector  
-    - **Stakeholder nodes:** Top 5 major shareholders, shown as transparent red circles  
-    - **Edges:** Shareholding relationships  
-    - **Edge thickness:** Shareholding percentage  
-    - **Node size:** Degree, or number of connected relationships  
-    - **Graph type:** Undirected weighted graph  
+    # - **Company nodes:** SET50 listed companies, colored by sector  
+    # - **Stakeholder nodes:** Top 5 major shareholders, shown as transparent red circles  
+    # - **Edges:** Shareholding relationships  
+    # - **Edge thickness:** Shareholding percentage  
+    # - **Node size:** Degree, or number of connected relationships  
+    # - **Graph type:** Undirected weighted graph  
 
     **Interpretation**
 
