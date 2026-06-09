@@ -10,14 +10,35 @@ st.set_page_config(page_title="SET50 Shareholder Network", page_icon="🕸️", 
 
 # ═══════════════════════ Load Data ═══════════════════════
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "shareholders.json")
+# Try multiple paths to find shareholders.json
+_possible_paths = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "shareholders.json"),
+    os.path.join(os.getcwd(), "shareholders.json"),
+    "shareholders.json",
+]
+
+DATA_PATH = None
+for _p in _possible_paths:
+    if os.path.exists(_p):
+        DATA_PATH = _p
+        break
+
+if DATA_PATH is None:
+    st.error("❌ ไม่พบไฟล์ shareholders.json — กรุณาตรวจสอบว่าอัปโหลดไฟล์นี้ขึ้น GitHub แล้ว")
+    st.info(f"Searched paths: {_possible_paths}")
+    st.info(f"Files in cwd ({os.getcwd()}): {os.listdir(os.getcwd())}")
+    st.stop()
 
 @st.cache_data
 def load_data():
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
-raw = load_data()
+try:
+    raw = load_data()
+except Exception as e:
+    st.error(f"❌ Error loading data: {e}")
+    st.stop()
 
 # SET50 sector mapping (H1/2026)
 SECTORS = {
