@@ -577,8 +577,6 @@ with tab3:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    "**Data:** Scraped from [SET](https://www.set.or.th)  \n"
-    "**Scraper:** `set50.py`  \n"
-    "**Course:** Social Network Analysis — HW1  \n"
+
     "**Stack:** Streamlit · NetworkX · PyVis"
 )
