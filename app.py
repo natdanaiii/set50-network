@@ -576,6 +576,4 @@ with tab3:
 # ═══════════════════════ Footer ═══════════════════════
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(
 
-)
