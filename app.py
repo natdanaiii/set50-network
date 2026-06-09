@@ -132,24 +132,24 @@ def safe_float(value):
         return 0.0
 
 
-def build_graph(selected_sectors, min_conn, min_holding):
+def build_graph(selected_sectors, min_conn):
     G = nx.Graph()
 
-    filtered_companies = [
+    selected_companies = [
         sym for sym, sec in SECTORS.items()
         if sec in selected_sectors
     ]
 
     edges = []
 
-    for sym in filtered_companies:
+    for sym in selected_companies:
         holders = raw.get(sym, [])
 
         for h in holders:
             shareholder_name = str(h.get("name", "")).strip()
             pct = safe_float(h.get("pct", 0))
 
-            if shareholder_name and pct >= min_holding:
+            if shareholder_name:
                 edges.append((sym, shareholder_name, pct))
 
     shareholder_count = Counter(sh for _, sh, _ in edges)
@@ -159,15 +159,14 @@ def build_graph(selected_sectors, min_conn, min_holding):
         if count >= min_conn
     }
 
-    for sym in filtered_companies:
-        company_has_edge = False
+    for sym in selected_companies:
+        company_edges = [
+            (company, shareholder, pct)
+            for company, shareholder, pct in edges
+            if company == sym and shareholder in valid_shareholders
+        ]
 
-        for company, shareholder, pct in edges:
-            if company == sym and shareholder in valid_shareholders:
-                company_has_edge = True
-                break
-
-        if company_has_edge:
+        if company_edges:
             G.add_node(
                 sym,
                 node_type="company",
@@ -192,6 +191,33 @@ def build_graph(selected_sectors, min_conn, min_holding):
     return G
 
 
+def calculate_static_positions(G):
+    """
+    Create fixed positions for a simple non-moving SNA graph.
+    This prevents the graph from moving after rendering.
+    """
+    if G.number_of_nodes() == 0:
+        return {}
+
+    pos = nx.spring_layout(
+        G,
+        seed=42,
+        k=1.2,
+        iterations=200,
+        weight="weight"
+    )
+
+    scaled_pos = {}
+
+    for node, (x, y) in pos.items():
+        scaled_pos[node] = {
+            "x": float(x * 900),
+            "y": float(y * 700)
+        }
+
+    return scaled_pos
+
+
 def render_network(G, show_edge_label=False):
     net = Network(
         height="760px",
@@ -204,17 +230,21 @@ def render_network(G, show_edge_label=False):
 
     degrees = dict(G.degree())
     max_degree = max(degrees.values()) if degrees else 1
+    positions = calculate_static_positions(G)
 
     # Add nodes
     for node, data in G.nodes(data=True):
         degree = degrees.get(node, 1)
         node_type = data.get("node_type", "")
 
+        x_pos = positions.get(node, {}).get("x", 0)
+        y_pos = positions.get(node, {}).get("y", 0)
+
         if node_type == "company":
             sector = data.get("sector", "")
             color = SECTOR_COLORS.get(sector, "#1f77b4")
 
-            node_size = 20 + (degree / max_degree) * 26
+            node_size = 18 + (degree / max_degree) * 24
 
             title = (
                 f"<b>Company:</b> {node}<br>"
@@ -228,17 +258,21 @@ def render_network(G, show_edge_label=False):
                 title=title,
                 color={
                     "background": color,
-                    "border": "#111111",
+                    "border": "#222222",
                     "highlight": {
-                        "background": "#ffd166",
-                        "border": "#111111"
+                        "background": "#FFD166",
+                        "border": "#222222"
                     }
                 },
                 size=node_size,
                 shape="circle",
                 borderWidth=2,
+                x=x_pos,
+                y=y_pos,
+                fixed=True,
+                physics=False,
                 font={
-                    "size": 18,
+                    "size": 17,
                     "color": "#111111",
                     "face": "arial",
                     "strokeWidth": 3,
@@ -248,7 +282,7 @@ def render_network(G, show_edge_label=False):
 
         else:
             label = node if len(node) <= 24 else node[:24] + "..."
-            node_size = 18 + (degree / max_degree) * 34
+            node_size = 15 + (degree / max_degree) * 34
 
             title = (
                 f"<b>Stakeholder / Shareholder:</b> {node}<br>"
@@ -262,15 +296,19 @@ def render_network(G, show_edge_label=False):
                 title=title,
                 color={
                     "background": "#ff4d4d",
-                    "border": "#111111",
+                    "border": "#222222",
                     "highlight": {
-                        "background": "#ffd166",
-                        "border": "#111111"
+                        "background": "#FFD166",
+                        "border": "#222222"
                     }
                 },
                 size=node_size,
                 shape="circle",
                 borderWidth=2,
+                x=x_pos,
+                y=y_pos,
+                fixed=True,
+                physics=False,
                 font={
                     "size": 13,
                     "color": "#111111",
@@ -284,7 +322,7 @@ def render_network(G, show_edge_label=False):
     for u, v, data in G.edges(data=True):
         pct = safe_float(data.get("weight", 1))
 
-        width = 1.2 + min(pct, 50) / 7
+        edge_width = 1.0 + min(pct, 50) / 8
         edge_label = f"{pct:.1f}%" if show_edge_label else ""
 
         net.add_edge(
@@ -292,16 +330,13 @@ def render_network(G, show_edge_label=False):
             v,
             title=f"Shareholding: {pct:.2f}%",
             label=edge_label,
-            width=width,
+            width=edge_width,
             color={
-                "color": "rgba(70,70,70,0.42)",
+                "color": "rgba(80,80,80,0.45)",
                 "highlight": "#000000",
                 "hover": "#000000"
             },
-            smooth={
-                "enabled": True,
-                "type": "dynamic"
-            },
+            smooth=False,
             font={
                 "size": 10,
                 "color": "#111111",
@@ -310,50 +345,36 @@ def render_network(G, show_edge_label=False):
             }
         )
 
-    # Force-directed SNA layout
+    # Important: physics disabled = graph does not move
     net.set_options("""
     {
-      "nodes": {
-        "scaling": {
-          "min": 15,
-          "max": 60
-        }
-      },
-      "edges": {
-        "smooth": {
-          "enabled": true,
-          "type": "dynamic"
-        },
-        "selectionWidth": 4,
-        "hoverWidth": 4
-      },
       "physics": {
-        "enabled": true,
-        "solver": "forceAtlas2Based",
-        "forceAtlas2Based": {
-          "gravitationalConstant": -130,
-          "centralGravity": 0.018,
-          "springLength": 180,
-          "springConstant": 0.045,
-          "damping": 0.55,
-          "avoidOverlap": 0.85
-        },
-        "stabilization": {
-          "enabled": true,
-          "iterations": 400,
-          "updateInterval": 25,
-          "fit": true
-        }
+        "enabled": false
       },
       "interaction": {
         "hover": true,
         "tooltipDelay": 100,
         "navigationButtons": true,
         "keyboard": true,
-        "dragNodes": true,
+        "dragNodes": false,
         "dragView": true,
         "zoomView": true,
         "multiselect": true
+      },
+      "nodes": {
+        "borderWidth": 2,
+        "shadow": {
+          "enabled": true,
+          "color": "rgba(0,0,0,0.18)",
+          "size": 8,
+          "x": 2,
+          "y": 2
+        }
+      },
+      "edges": {
+        "selectionWidth": 3,
+        "hoverWidth": 3,
+        "smooth": false
       }
     }
     """)
@@ -366,12 +387,11 @@ def render_network(G, show_edge_label=False):
 st.title("🕸️ SET50 Shareholder Network")
 
 st.caption(
-    "Social network visualization mapping SET50 listed companies and their top 5 major shareholders as stakeholders."
+    "A static social network visualization mapping SET50 listed companies and their top 5 major shareholders as stakeholders."
 )
 
 st.info(
-    "Each node represents either a SET50 company or a stakeholder/shareholder. "
-    "Each edge represents a shareholding relationship. "
+    "Nodes represent companies and stakeholders. Edges represent shareholding relationships. "
     "Node size is based on degree, and edge thickness is based on shareholding percentage."
 )
 
@@ -392,16 +412,7 @@ min_conn = st.sidebar.slider(
     min_value=1,
     max_value=20,
     value=1,
-    help="Use 1 to show all stakeholders. Increase this value to focus on hub shareholders."
-)
-
-min_holding = st.sidebar.slider(
-    "Minimum holding percentage",
-    min_value=0.0,
-    max_value=50.0,
-    value=0.0,
-    step=0.5,
-    help="Filter out smaller shareholding relationships."
+    help="Use 1 to show all stakeholders. Increase this value to focus on common shareholders."
 )
 
 show_edge_label = st.sidebar.checkbox(
@@ -412,8 +423,7 @@ show_edge_label = st.sidebar.checkbox(
 
 G = build_graph(
     selected_sectors=selected_sectors,
-    min_conn=min_conn,
-    min_holding=min_holding
+    min_conn=min_conn
 )
 
 company_count = sum(
@@ -426,7 +436,7 @@ shareholder_count = sum(
     if data.get("node_type") == "shareholder"
 )
 
-edge_count = G.number_of_edges()
+relationship_count = G.number_of_edges()
 
 density = nx.density(G) if G.number_of_nodes() > 1 else 0
 
@@ -436,7 +446,7 @@ m1, m2, m3, m4 = st.columns(4)
 
 m1.metric("Companies", company_count)
 m2.metric("Stakeholders", shareholder_count)
-m3.metric("Relationships", edge_count)
+m3.metric("Relationships", relationship_count)
 m4.metric("Density", f"{density:.4f}")
 
 # ═══════════════════════ Legend ═══════════════════════
@@ -455,15 +465,17 @@ with st.expander("📌 Legend and Methodology", expanded=True):
 
     **Interpretation**
 
-    A stakeholder with many connections can be considered a hub in the network.  
-    Companies connected to the same stakeholder may have an indirect ownership relationship through common shareholders.
+    A stakeholder with many connections can be interpreted as a hub in the network.  
+    Companies connected to the same stakeholder may have an indirect relationship through common ownership.
     """)
 
     sector_items = []
 
     for sector in sorted(SECTOR_COLORS):
         color = SECTOR_COLORS[sector]
-        sector_items.append(f"<span style='color:{color}; font-size:18px;'>●</span> {sector}")
+        sector_items.append(
+            f"<span style='color:{color}; font-size:18px;'>●</span> {sector}"
+        )
 
     st.markdown("**Company sector colors:**", unsafe_allow_html=True)
     st.markdown(" · ".join(sector_items), unsafe_allow_html=True)
@@ -472,7 +484,7 @@ st.markdown("---")
 
 # ═══════════════════════ Network Visualization ═══════════════════════
 
-st.subheader("🕸️ Network Visualization")
+st.subheader("🕸️ Static Network Visualization")
 
 if G.number_of_nodes() == 0:
     st.warning("No data for current filters. Please lower the filter values.")
