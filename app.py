@@ -578,5 +578,4 @@ with tab3:
 st.sidebar.markdown("---")
 st.sidebar.markdown(
 
-    "**Stack:** Streamlit · NetworkX · PyVis"
 )
