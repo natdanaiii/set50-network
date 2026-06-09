@@ -1,4 +1,4 @@
-streamlit==1.45.1
+streamlit
 networkx==3.4.2
 pyvis==0.3.2
-pandas==2.2.3
+pandas
